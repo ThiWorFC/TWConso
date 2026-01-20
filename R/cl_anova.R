@@ -50,6 +50,7 @@ cl_ANOVA <- function(dataset, test="HSD"){
     purrr::map(ANOVAperCl, test=test)
 
   res <- list(overall=aov_overall, cluster=aov_cluster)
+
   return(res)
 
 }
