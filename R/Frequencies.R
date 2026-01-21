@@ -120,7 +120,7 @@ Frequencies <- function(dataset, var, labels=NULL, test="No", topn="Top3"){
 
         groups <- agricolae::orderPvalue(rownames(data), means=data$Prop, alpha=0.05,
                                          pvalue=res_pval[rownames(data),rownames(data)], console=FALSE) %>%
-          tibble::tibble(rownames="Product")
+          tibble::as_tibble(rownames="Product")
 
         return(groups)
 

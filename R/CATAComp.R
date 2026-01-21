@@ -83,7 +83,7 @@ CATAComp <- function(dataset, var1, var2, comp, paircomp="Yes"){
       formul="Responses ~ Effect"
     }
 
-    if (sd(data$Responses) > 0 & nbprod > 1){
+    if (!is.na(sd(data$Responses, na.rm=TRUE)) && sd(data$Responses, na.rm=TRUE) > 0 && nbprod > 1){
       res_aov <- aov(as.formula(formul), data=data)
 
       if (paircomp == "Yes"){
@@ -149,6 +149,7 @@ CATAComp <- function(dataset, var1, var2, comp, paircomp="Yes"){
           split(.$CATA) %>%
           purrr::map(.CATAtest, effect=comp, paircomp=paircomp) %>%
           tibble::enframe(name="CATA", value="res") %>%
+          tidyr::unnest(res) %>%
           tidyr::unnest(res)
       })
 
@@ -161,6 +162,7 @@ CATAComp <- function(dataset, var1, var2, comp, paircomp="Yes"){
           split(.$CATA) %>%
           purrr::map(.CATAtest, effect=comp, paircomp=paircomp) %>%
           tibble::enframe(name="CATA", value="res") %>%
+          tidyr::unnest(res) %>%
           tidyr::unnest(res)
       })
   }
