@@ -146,6 +146,7 @@ CATAComp <- function(dataset, var1, var2, comp, paircomp="Yes"){
       split(.$Product) %>%
       purrr::map(function(data){
         res <- data %>%
+          dplyr::filter(!is.na(Responses)) %>%
           split(.$CATA) %>%
           purrr::map(.CATAtest, effect=comp, paircomp=paircomp) %>%
           tibble::enframe(name="CATA", value="res") %>%
@@ -159,7 +160,9 @@ CATAComp <- function(dataset, var1, var2, comp, paircomp="Yes"){
       split(.$Type) %>%
       purrr::map(function(data){
         res <- data %>%
+          dplyr::filter(!is.na(Responses)) %>%
           split(.$CATA) %>%
+          purrr::keep(~ nrow(.x) > 0) %>%
           purrr::map(.CATAtest, effect=comp, paircomp=paircomp) %>%
           tibble::enframe(name="CATA", value="res") %>%
           tidyr::unnest(res) %>%
