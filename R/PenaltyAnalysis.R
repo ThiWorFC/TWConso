@@ -151,28 +151,48 @@ PenaltyAnalysis <- function(dataset, var, liking, prop=0.2, comp="Product", size
     dplyr::mutate(JAR = factor(JAR, levels=c("JAR", "Too Little", "Too Much"))) %>%
     split(.$Product) %>%
     purrr::map(function(data){
-      data %>%
-        dplyr::nest_by(Variables) %>%
-        dplyr::mutate(mod = list(tryCatch(lm(Liking ~ JAR, data=data), error = function(e) NULL))) %>%
-        dplyr::reframe(
-          if (!inherits(mod, "lm")) {
-            # Exception: JAR has fewer than 2 levels in this Product/Variable
-            # combination (e.g. every rating was "JAR"), so lm() failed and
-            # `mod` is not a fitted model (it may come through as NULL, or as
-            # an empty vector once stored/retrieved from the rowwise list-
-            # column -- checking the class rather than is.null() covers both).
-            # Return NAs instead of erroring out, using the same term names
-            # lm() would produce.
-            tibble::tibble(term = c("(Intercept)", "JARToo Little", "JARToo Much"),
-                            estimate = NA_real_, p.value = NA_real_)
-          } else {
-            broom::tidy(summary(mod))
-          }
-        ) %>%
-        dplyr::ungroup() %>%
-        dplyr::select(Variables, JAR=term, Penalty=estimate, Pvalue=p.value) %>%
-        dplyr::mutate(JAR = stringr::str_remove(JAR, "JAR")) %>%
-        dplyr::mutate(JAR = stringr::str_replace(JAR, "(\\(Intercept\\))", "JAR"))
+      if (nrow(data) == 0) {
+        # Exception: this Product had every Variable filtered out upstream
+        # (e.g. every rating for every attribute was "JAR"), so there's
+        # nothing left to fit a model on. nest_by()/reframe() on a 0-row
+        # input errors ("Can't recycle ... to size 0"), so short-circuit
+        # here and return an empty result -- the full_join with JAR_freq
+        # below fills in the correct Proportion (100% JAR) with NA Penalty.
+        return(tibble::tibble(Variables = factor(character(), levels = levels(data$Variables)),
+                               JAR = character(), Penalty = numeric(), Pvalue = numeric()))
+      }
+      tryCatch({
+        data %>%
+          dplyr::nest_by(Variables) %>%
+          dplyr::mutate(mod = list(tryCatch(lm(Liking ~ JAR, data=data), error = function(e) NULL))) %>%
+          dplyr::reframe(
+            if (!inherits(mod, "lm")) {
+              # Exception: JAR has fewer than 2 levels in this Product/Variable
+              # combination (e.g. every rating was "JAR"), so lm() failed and
+              # `mod` is not a fitted model (it may come through as NULL, or as
+              # an empty vector once stored/retrieved from the rowwise list-
+              # column -- checking the class rather than is.null() covers both).
+              # Return NAs instead of erroring out, using the same term names
+              # lm() would produce.
+              tibble::tibble(term = c("(Intercept)", "JARToo Little", "JARToo Much"),
+                              estimate = NA_real_, p.value = NA_real_)
+            } else {
+              broom::tidy(summary(mod))
+            }
+          ) %>%
+          dplyr::ungroup() %>%
+          dplyr::select(Variables, JAR=term, Penalty=estimate, Pvalue=p.value) %>%
+          dplyr::mutate(JAR = stringr::str_remove(JAR, "JAR")) %>%
+          dplyr::mutate(JAR = stringr::str_replace(JAR, "(\\(Intercept\\))", "JAR"))
+      }, error = function(e) {
+        # Final safety net: if anything unexpected still goes wrong while
+        # fitting/tidying models for this product (e.g. an edge case not
+        # covered above), don't crash the whole analysis -- return NA rows
+        # for every Variable x JAR-level combination in this product instead.
+        tidyr::expand_grid(Variables = unique(data$Variables),
+                            JAR = c("JAR", "Too Little", "Too Much")) %>%
+          dplyr::mutate(Penalty = NA_real_, Pvalue = NA_real_)
+      })
     }) %>%
     tibble::enframe(name = "Product", value = "res") %>%
     tidyr::unnest(res) %>%
