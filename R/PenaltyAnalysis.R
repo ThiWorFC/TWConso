@@ -155,10 +155,14 @@ PenaltyAnalysis <- function(dataset, var, liking, prop=0.2, comp="Product", size
         dplyr::nest_by(Variables) %>%
         dplyr::mutate(mod = list(tryCatch(lm(Liking ~ JAR, data=data), error = function(e) NULL))) %>%
         dplyr::reframe(
-          if (is.null(mod)) {
+          if (!inherits(mod, "lm")) {
             # Exception: JAR has fewer than 2 levels in this Product/Variable
-            # combination (e.g. every rating was "JAR"). Return NAs instead
-            # of erroring out, using the same term names lm() would produce.
+            # combination (e.g. every rating was "JAR"), so lm() failed and
+            # `mod` is not a fitted model (it may come through as NULL, or as
+            # an empty vector once stored/retrieved from the rowwise list-
+            # column -- checking the class rather than is.null() covers both).
+            # Return NAs instead of erroring out, using the same term names
+            # lm() would produce.
             tibble::tibble(term = c("(Intercept)", "JARToo Little", "JARToo Much"),
                             estimate = NA_real_, p.value = NA_real_)
           } else {
