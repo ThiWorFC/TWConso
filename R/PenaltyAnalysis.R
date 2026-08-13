@@ -153,8 +153,18 @@ PenaltyAnalysis <- function(dataset, var, liking, prop=0.2, comp="Product", size
     purrr::map(function(data){
       data %>%
         dplyr::nest_by(Variables) %>%
-        dplyr::mutate(mod = list(lm(Liking ~ JAR, data=data))) %>%
-        dplyr::reframe(broom::tidy(summary(mod))) %>%
+        dplyr::mutate(mod = list(tryCatch(lm(Liking ~ JAR, data=data), error = function(e) NULL))) %>%
+        dplyr::reframe(
+          if (is.null(mod)) {
+            # Exception: JAR has fewer than 2 levels in this Product/Variable
+            # combination (e.g. every rating was "JAR"). Return NAs instead
+            # of erroring out, using the same term names lm() would produce.
+            tibble::tibble(term = c("(Intercept)", "JARToo Little", "JARToo Much"),
+                            estimate = NA_real_, p.value = NA_real_)
+          } else {
+            broom::tidy(summary(mod))
+          }
+        ) %>%
         dplyr::ungroup() %>%
         dplyr::select(Variables, JAR=term, Penalty=estimate, Pvalue=p.value) %>%
         dplyr::mutate(JAR = stringr::str_remove(JAR, "JAR")) %>%
