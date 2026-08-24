@@ -55,6 +55,7 @@ PenaltyAnalysis <- function(dataset, var, liking, prop=0.2, comp="Product", size
       ggplot2::scale_x_continuous(name="", breaks=seq(0,1,0.2), labels=paste0(seq(0,100,20),"%"), limits=c(0,1))+
       ggplot2::geom_hline(yintercept=0, lty=2, col="grey70")+
       ggplot2::geom_vline(xintercept=prop, lty=2, col="grey70")+
+      ggplot2::scale_color_manual(values = c("Too Little"="#619CFF", "JAR"="#00BA38", "Too Much"="#F8766D"))
       ggplot2::scale_alpha_manual(values = c("Signif."=1, "NS"=0.5))+
       ggplot2::ggtitle(str_c("Penalty Analysis for ", title),"(Terms greyed out are not significant at 5%; Bubbles' sizes based on Weighted Penalty)")+
       ggplot2::guides(colour="none", alpha="none", size="none")+
@@ -63,7 +64,6 @@ PenaltyAnalysis <- function(dataset, var, liking, prop=0.2, comp="Product", size
 
     return(p)
   }
-
 
   # Preparing the Data
   if (split == "Yes"){
@@ -151,13 +151,8 @@ PenaltyAnalysis <- function(dataset, var, liking, prop=0.2, comp="Product", size
     dplyr::mutate(JAR = factor(JAR, levels=c("JAR", "Too Little", "Too Much"))) %>%
     split(.$Product) %>%
     purrr::map(function(data){
+
       if (nrow(data) == 0) {
-        # Exception: this Product had every Variable filtered out upstream
-        # (e.g. every rating for every attribute was "JAR"), so there's
-        # nothing left to fit a model on. nest_by()/reframe() on a 0-row
-        # input errors ("Can't recycle ... to size 0"), so short-circuit
-        # here and return an empty result -- the full_join with JAR_freq
-        # below fills in the correct Proportion (100% JAR) with NA Penalty.
         return(tibble::tibble(Variables = factor(character(), levels = levels(data$Variables)),
                                JAR = character(), Penalty = numeric(), Pvalue = numeric()))
       }
@@ -167,13 +162,6 @@ PenaltyAnalysis <- function(dataset, var, liking, prop=0.2, comp="Product", size
           dplyr::mutate(mod = list(tryCatch(lm(Liking ~ JAR, data=data), error = function(e) NULL))) %>%
           dplyr::reframe(
             if (!inherits(mod, "lm")) {
-              # Exception: JAR has fewer than 2 levels in this Product/Variable
-              # combination (e.g. every rating was "JAR"), so lm() failed and
-              # `mod` is not a fitted model (it may come through as NULL, or as
-              # an empty vector once stored/retrieved from the rowwise list-
-              # column -- checking the class rather than is.null() covers both).
-              # Return NAs instead of erroring out, using the same term names
-              # lm() would produce.
               tibble::tibble(term = c("(Intercept)", "JARToo Little", "JARToo Much"),
                               estimate = NA_real_, p.value = NA_real_)
             } else {
@@ -185,10 +173,6 @@ PenaltyAnalysis <- function(dataset, var, liking, prop=0.2, comp="Product", size
           dplyr::mutate(JAR = stringr::str_remove(JAR, "JAR")) %>%
           dplyr::mutate(JAR = stringr::str_replace(JAR, "(\\(Intercept\\))", "JAR"))
       }, error = function(e) {
-        # Final safety net: if anything unexpected still goes wrong while
-        # fitting/tidying models for this product (e.g. an edge case not
-        # covered above), don't crash the whole analysis -- return NA rows
-        # for every Variable x JAR-level combination in this product instead.
         tidyr::expand_grid(Variables = unique(data$Variables),
                             JAR = c("JAR", "Too Little", "Too Much")) %>%
           dplyr::mutate(Penalty = NA_real_, Pvalue = NA_real_)
