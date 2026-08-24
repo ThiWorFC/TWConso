@@ -58,7 +58,8 @@ PenaltyAnalysis <- function(dataset, var, liking, prop=0.2, comp="Product", size
       ggplot2::scale_color_manual(values = c("Too Little"="#619CFF", "JAR"="#00BA38", "Too Much"="#F8766D"))
       ggplot2::scale_alpha_manual(values = c("Signif."=1, "NS"=0.5))+
       ggplot2::ggtitle(str_c("Penalty Analysis for ", title),"(Terms greyed out are not significant at 5%; Bubbles' sizes based on Weighted Penalty)")+
-      ggplot2::guides(colour="none", alpha="none", size="none")+
+        ggplot2::guides(alpha="none", size="none")+
+      # ggplot2::guides(colour="none", alpha="none", size="none")+
       ggplot2::theme_minimal()+
       ggplot2::theme(panel.grid = ggplot2::element_blank(), axis.line = ggplot2::element_line())
 
