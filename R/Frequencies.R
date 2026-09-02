@@ -7,12 +7,51 @@
 #' @param labels The labels attached to the levels for that variable
 #' @param test 'yes' or 'no' for significance test
 #' @param topn Compute topbox (e.g. 'Top3')
+#' @param extra_col Optional. Name of a single variable (must be one of `var`) that carries
+#'   one extra scale point beyond the usual uneven scale (e.g. a 9pt scale with a 10th point,
+#'   or a 5pt scale with a 6th point). Frequencies are reported on the full scale (including
+#'   the extra point); Top/Middle/Bottom and the significance tests are computed only on the
+#'   uneven scale (1-9 or 1-5); respondents on the extra point are reported separately as
+#'   their own "Extra" category and excluded from Top/Middle/Bottom/Total.
+#' @param extra_scale Optional. The full scale maximum for `extra_col` (6 or 10). Required
+#'   whenever `extra_col` is provided.
+#' @param extra_label Optional. Text label to use for the extra point of `extra_col`, used
+#'   as a fallback only when no value label can be found attached to the raw data column
+#'   (e.g. from an EQ/haven-style import). Falls back to `as.character(extra_scale)` if
+#'   neither is available.
 #'
 #' @returns The results for the frequency analysis
 #' @export
 #'
 #' @examples NULL
-Frequencies <- function(dataset, var, labels=NULL, test="No", topn="Top3"){
+Frequencies <- function(dataset, var, labels=NULL, test="No", topn="Top3",
+                         extra_col=NULL, extra_scale=NULL, extra_label=NULL){
+
+  ## --- Validate / resolve the "extra point" setup -------------------------
+  if (!is.null(extra_col)){
+
+    if (!extra_col %in% var){
+      stop("`extra_col` must be one of the variables listed in `var`.")
+    }
+    if (is.null(extra_scale)){
+      stop("`extra_scale` must be provided when `extra_col` is used.")
+    }
+    if (!extra_scale %in% c(6, 10)){
+      warning("`extra_scale` is expected to be 6 or 10 (one point above a 5pt or 9pt scale).")
+    }
+
+    # Resolve the label to display for the extra point: embedded value label first,
+    # then the user-supplied extra_label, then a plain numeric fallback.
+    extra_label_final <- NULL
+    raw_labels <- attr(dataset[[extra_col]], "labels")
+    if (!is.null(raw_labels)){
+      match_name <- names(raw_labels)[raw_labels == extra_scale]
+      if (length(match_name) >= 1) extra_label_final <- match_name[1]
+    }
+    if (is.null(extra_label_final)){
+      extra_label_final <- if (!is.null(extra_label)) extra_label else as.character(extra_scale)
+    }
+  }
 
   if (is.null(labels)){
 
@@ -21,13 +60,25 @@ Frequencies <- function(dataset, var, labels=NULL, test="No", topn="Top3"){
       tidyr::pivot_longer(-Product, names_to="Variables", values_to="Scores") %>%
       dplyr::mutate(Scores = as.numeric(Scores)) %>%
       dplyr::group_by(Variables) %>%
-      dplyr::summarize(Max = max(Scores)) %>%
+      dplyr::summarize(Max = max(Scores, na.rm=TRUE)) %>%
       dplyr::mutate(Max = ifelse(Max <= 5, 5, 9)) %>%
+      { if (!is.null(extra_col))
+          dplyr::mutate(., Max = ifelse(Variables == extra_col, extra_scale, Max))
+        else . } %>%
       dplyr::ungroup() %>%
       split(.$Variables) %>%
       purrr::map(function(data){
-        tibble::tibble(Display = rep(as.character(data$Variables, data$Max)),
-                       Scale = 1:data$Max, Label = as.character(1:data$Max))
+
+        is_extra <- !is.null(extra_col) && unique(data$Variables) == extra_col
+
+        this_label <- if (is_extra){
+          c(as.character(1:(data$Max - 1)), extra_label_final)
+        } else {
+          as.character(1:data$Max)
+        }
+
+        tibble::tibble(Display = rep(as.character(data$Variables), data$Max),
+                       Scale = 1:data$Max, Label = this_label)
       }) %>%
       purrr::reduce(dplyr::bind_rows)
   }
@@ -35,7 +86,11 @@ Frequencies <- function(dataset, var, labels=NULL, test="No", topn="Top3"){
   maxval <- labels %>%
     dplyr::group_by(Display) %>%
     dplyr::summarize(Max = max(Scale)) %>%
-    dplyr::ungroup()
+    dplyr::ungroup() %>%
+    dplyr::mutate(TopMax = Max) %>%
+    { if (!is.null(extra_col))
+        dplyr::mutate(., TopMax = ifelse(Display == extra_col, extra_scale - 1, TopMax))
+      else . }
 
   if (topn == "Top3"){
     topval1 = 3
@@ -54,9 +109,10 @@ Frequencies <- function(dataset, var, labels=NULL, test="No", topn="Top3"){
     dplyr::mutate(Responses = as.numeric(Responses)) %>%
     dplyr::full_join(maxval, by=c("Variables"="Display")) %>%
     dplyr::mutate(Variables = factor(Variables, levels=var)) %>%
-    dplyr::mutate(Top = ifelse((Max == 9 & Responses >= (Max + 1 - topval1)) | (Max == 5 & Responses >= (Max + 1 - topval2)), 1, 0),
-           Bottom = ifelse((Max == 9 & Responses <= topval1) | (Max == 5 & Responses <= topval2), 1, 0)) %>%
-    dplyr::mutate(Middle = ifelse(Top + Bottom == 0, 1, 0))
+    dplyr::mutate(Extra = ifelse(Responses > TopMax, 1, 0),
+           Top = ifelse(Extra == 0 & ((TopMax == 9 & Responses >= (TopMax + 1 - topval1)) | (TopMax == 5 & Responses >= (TopMax + 1 - topval2))), 1, 0),
+           Bottom = ifelse(Extra == 0 & ((TopMax == 9 & Responses <= topval1) | (TopMax == 5 & Responses <= topval2)), 1, 0)) %>%
+    dplyr::mutate(Middle = ifelse(Top + Bottom + Extra == 0, 1, 0))
 
   res_freq <- res_ind %>%
     split(.$Variables) %>%
@@ -75,14 +131,30 @@ Frequencies <- function(dataset, var, labels=NULL, test="No", topn="Top3"){
         dplyr::mutate(Proportion = N/sum(N)) %>%
         dplyr::mutate(Proportion = scales::percent(Proportion, accuracy=1)) %>%
         dplyr::arrange(desc(Responses)) %>%
-        dplyr::ungroup()
+        dplyr::ungroup() %>%
+        dplyr::mutate(TopMax = data$TopMax[1])
     })
 
   res_top <- res_ind %>%
-    dplyr::group_by(Product, Variables, Max) %>%
-    dplyr::summarize(dplyr::across(c("Top","Middle","Bottom"), mean)) %>%
+    dplyr::group_by(Product, Variables, TopMax) %>%
+    dplyr::summarize(dplyr::across(c("Top","Middle","Bottom","Extra"), mean)) %>%
     dplyr::ungroup() %>%
-    tidyr::pivot_longer(Top:Bottom, names_to="Responses", values_to="N") %>%
+    dplyr::rename(Max = TopMax) %>%
+    tidyr::pivot_longer(cols = c(Top, Middle, Bottom, Extra), names_to="Responses", values_to="N")
+
+  # Keep the "Extra" category only for the variable it actually belongs to -
+  # for every other variable it is structurally 0% and would just clutter the legend.
+  if (!is.null(extra_col)){
+    res_top <- res_top %>%
+      dplyr::filter(!(Responses == "Extra" & Variables != extra_col)) %>%
+      dplyr::mutate(Label = ifelse(Responses == "Extra", extra_label_final, NA_character_))
+  } else {
+    res_top <- res_top %>%
+      dplyr::filter(Responses != "Extra") %>%
+      dplyr::mutate(Label = NA_character_)
+  }
+
+  res_top <- res_top %>%
     dplyr::mutate(Proportion = scales::percent(N, accuracy=1), N = 100*N) %>%
     split(.$Variables)
 
