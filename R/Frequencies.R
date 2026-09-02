@@ -40,14 +40,29 @@ Frequencies <- function(dataset, var, labels=NULL, test="No", topn="Top3",
       warning("`extra_scale` is expected to be 6 or 10 (one point above a 5pt or 9pt scale).")
     }
 
-    # Resolve the label to display for the extra point: embedded value label first,
-    # then the user-supplied extra_label, then a plain numeric fallback.
+    # Resolve the label to display for the extra point. Priority order:
+    #   1) the Label already present in a user-supplied `labels` table (e.g. built
+    #      from EQ metadata upstream) for Display==extra_col & Scale==extra_scale
+    #   2) an embedded value label attached to the raw data column itself
+    #   3) the `extra_label` argument
+    #   4) a plain numeric fallback (as.character(extra_scale))
     extra_label_final <- NULL
-    raw_labels <- attr(dataset[[extra_col]], "labels")
-    if (!is.null(raw_labels)){
-      match_name <- names(raw_labels)[raw_labels == extra_scale]
-      if (length(match_name) >= 1) extra_label_final <- match_name[1]
+
+    if (!is.null(labels)){
+      from_labels <- labels %>%
+        dplyr::filter(Display == extra_col, Scale == extra_scale) %>%
+        dplyr::pull(Label)
+      if (length(from_labels) >= 1 && !is.na(from_labels[1])) extra_label_final <- from_labels[1]
     }
+
+    if (is.null(extra_label_final)){
+      raw_labels <- attr(dataset[[extra_col]], "labels")
+      if (!is.null(raw_labels)){
+        match_name <- names(raw_labels)[raw_labels == extra_scale]
+        if (length(match_name) >= 1) extra_label_final <- match_name[1]
+      }
+    }
+
     if (is.null(extra_label_final)){
       extra_label_final <- if (!is.null(extra_label)) extra_label else as.character(extra_scale)
     }
