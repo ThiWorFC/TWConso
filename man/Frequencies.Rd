@@ -4,7 +4,16 @@
 \alias{Frequencies}
 \title{Frequency Tables}
 \usage{
-Frequencies(dataset, var, labels = NULL, test = "No", topn = "Top3")
+Frequencies(
+  dataset,
+  var,
+  labels = NULL,
+  test = "No",
+  topn = "Top3",
+  extra_col = NULL,
+  extra_scale = NULL,
+  extra_label = NULL
+)
 }
 \arguments{
 \item{dataset}{The data to analyze}
@@ -16,6 +25,21 @@ Frequencies(dataset, var, labels = NULL, test = "No", topn = "Top3")
 \item{test}{'yes' or 'no' for significance test}
 
 \item{topn}{Compute topbox (e.g. 'Top3')}
+
+\item{extra_col}{Optional. Name of a single variable (must be one of \code{var}) that carries
+one extra scale point beyond the usual uneven scale (e.g. a 9pt scale with a 10th point,
+or a 5pt scale with a 6th point). Frequencies are reported on the full scale (including
+the extra point); Top/Middle/Bottom and the significance tests are computed only on the
+uneven scale (1-9 or 1-5); respondents on the extra point are reported separately as
+their own "Extra" category and excluded from Top/Middle/Bottom/Total.}
+
+\item{extra_scale}{Optional. The full scale maximum for \code{extra_col} (6 or 10). Required
+whenever \code{extra_col} is provided.}
+
+\item{extra_label}{Optional. Text label to use for the extra point of \code{extra_col}, used
+as a fallback only when no value label can be found attached to the raw data column
+(e.g. from an EQ/haven-style import). Falls back to \code{as.character(extra_scale)} if
+neither is available.}
 }
 \value{
 The results for the frequency analysis
