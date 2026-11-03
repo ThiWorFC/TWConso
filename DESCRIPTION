@@ -1,6 +1,6 @@
 Package: TWConso
 Title: Consumer Tools
-Version: 0.0.0.9000
+Version: 0.1.0
 Authors@R: 
     person("Thierry", "Worch", , "thierry.worch@frieslandcampina.com", role = c("aut", "cre"))
 Description: Provide some additional home-made functions for Consumer analyses.
