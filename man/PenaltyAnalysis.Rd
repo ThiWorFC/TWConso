@@ -11,7 +11,8 @@ PenaltyAnalysis(
   prop = 0.2,
   comp = "Product",
   size = 8,
-  split = "Yes"
+  split = "Yes",
+  kid = FALSE
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ PenaltyAnalysis(
 \item{size}{Control the size of the text on x-axis label}
 
 \item{split}{Split the results by 'Type' ('Yes'/'No')}
+
+\item{kid}{Boolean, FALSE by default: use a 3pt JAR scale for kids, 5pt scale otherwise (for mom/kids diary)}
 }
 \value{
 The results of the penalty analysis

@@ -9,12 +9,13 @@
 #' @param comp Comparison by 'Attribute' or 'Product'
 #' @param size Control the size of the text on x-axis label
 #' @param split Split the results by 'Type' ('Yes'/'No')
+#' @param kid Boolean, FALSE by default: use a 3pt JAR scale for kids, 5pt scale otherwise (for mom/kids diary)
 #'
 #' @returns The results of the penalty analysis
 #' @export
 #'
 #' @examples NULL
-PenaltyAnalysis <- function(dataset, var, liking, prop=0.2, comp="Product", size=8, split="Yes"){
+PenaltyAnalysis <- function(dataset, var, liking, prop=0.2, comp="Product", size=8, split="Yes", kid=FALSE){
 
   ## JAR Frequency Plot
   .JARFreqPlot <- function(data, title, comp="Product", size=8){
@@ -73,22 +74,51 @@ PenaltyAnalysis <- function(dataset, var, liking, prop=0.2, comp="Product", size
       dplyr::select(Judge, Product, Liking = tidyselect::all_of(liking), tidyselect::all_of(var)) %>%
       tidyr::pivot_longer(tidyselect::all_of(var), names_to=c("Type", "Variables"), values_to="Scores", names_sep="_") %>%
       dplyr::select(-Type) %>%
-      dplyr::mutate(Variables = forcats::fct_inorder(Variables), dplyr::across(c("Liking","Scores"), as.numeric)) %>%
-      dplyr::mutate(JAR = dplyr::case_when(
-        Scores == 3 ~ "JAR",
-        Scores < 3 ~ "Too Little",
-        .default = "Too Much"))
+      dplyr::mutate(Variables = forcats::fct_inorder(Variables), dplyr::across(c("Liking","Scores"), as.numeric))
+
+    if (kid){
+
+      JAR_data <- JAR_data %>%
+        dplyr::mutate(JAR = dplyr::case_when(
+          Scores == 2 ~ "JAR",
+          Scores < 2 ~ "Too Little",
+          .default = "Too Much"))
+
+    } else {
+
+      JAR_data <- JAR_data %>%
+        dplyr::mutate(JAR = dplyr::case_when(
+          Scores == 3 ~ "JAR",
+          Scores < 3 ~ "Too Little",
+          .default = "Too Much"))
+
+    }
 
   } else {
 
     JAR_data <- dataset %>%
       dplyr::select(Judge, Product, Liking = tidyselect::all_of(liking), tidyselect::all_of(var)) %>%
       tidyr::pivot_longer(tidyselect::all_of(var), names_to="Variables", values_to="Scores") %>%
-      dplyr::mutate(Variables = forcats::fct_inorder(Variables), dplyr::across(c("Liking","Scores"), as.numeric)) %>%
-      dplyr::mutate(JAR = dplyr::case_when(
-        Scores == 3 ~ "JAR",
-        Scores < 3 ~ "Too Little",
-        .default = "Too Much"))
+      dplyr::mutate(Variables = forcats::fct_inorder(Variables), dplyr::across(c("Liking","Scores"), as.numeric))
+
+    if (kid){
+
+      JAR_data <- JAR_data %>%
+        dplyr::mutate(JAR = dplyr::case_when(
+          Scores == 2 ~ "JAR",
+          Scores < 2 ~ "Too Little",
+          .default = "Too Much"))
+
+    } else {
+
+      JAR_data <- JAR_data %>%
+        dplyr::mutate(JAR = dplyr::case_when(
+          Scores == 3 ~ "JAR",
+          Scores < 3 ~ "Too Little",
+          .default = "Too Much"))
+
+    }
+
   }
 
   # Frequency
